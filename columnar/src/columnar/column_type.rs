@@ -20,6 +20,7 @@ pub enum ColumnType {
     Bool = 5u8,
     IpAddr = 6u8,
     DateTime = 7u8,
+    U128 = 8u8,
 }
 
 impl fmt::Display for ColumnType {
@@ -33,13 +34,14 @@ impl fmt::Display for ColumnType {
             ColumnType::Bool => "bool",
             ColumnType::IpAddr => "ip",
             ColumnType::DateTime => "datetime",
+            ColumnType::U128 => "u128",
         };
         write!(f, "{short_str}")
     }
 }
 
 // The order needs to match _exactly_ the order in the enum
-const COLUMN_TYPES: [ColumnType; 8] = [
+const COLUMN_TYPES: [ColumnType; 9] = [
     ColumnType::I64,
     ColumnType::U64,
     ColumnType::F64,
@@ -48,6 +50,7 @@ const COLUMN_TYPES: [ColumnType; 8] = [
     ColumnType::Bool,
     ColumnType::IpAddr,
     ColumnType::DateTime,
+    ColumnType::U128,
 ];
 
 impl ColumnType {
@@ -142,7 +145,8 @@ impl ColumnType {
             | ColumnType::Str
             | ColumnType::Bool
             | ColumnType::IpAddr
-            | ColumnType::DateTime => None,
+            | ColumnType::DateTime
+            | ColumnType::U128 => None,
         }
     }
 }
@@ -208,6 +212,16 @@ impl HasAssociatedColumnType for Ipv6Addr {
 
     fn default_value() -> Self {
         Ipv6Addr::from([0u8; 16])
+    }
+}
+
+impl HasAssociatedColumnType for u128 {
+    fn column_type() -> ColumnType {
+        ColumnType::U128
+    }
+
+    fn default_value() -> Self {
+        0
     }
 }
 

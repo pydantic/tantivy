@@ -16,6 +16,7 @@ pub enum DynamicColumn {
     I64(Column<i64>),
     U64(Column<u64>),
     F64(Column<f64>),
+    U128(Column<u128>),
     IpAddr(Column<Ipv6Addr>),
     DateTime(Column<DateTime>),
     Bytes(BytesColumn),
@@ -34,6 +35,7 @@ impl fmt::Debug for DynamicColumn {
             DynamicColumn::I64(col) => write!(f, " {col:?}")?,
             DynamicColumn::U64(col) => write!(f, " {col:?}")?,
             DynamicColumn::F64(col) => write!(f, "{col:?}")?,
+            DynamicColumn::U128(col) => write!(f, "{col:?}")?,
             DynamicColumn::IpAddr(col) => write!(f, "{col:?}")?,
             DynamicColumn::DateTime(col) => write!(f, "{col:?}")?,
             DynamicColumn::Bytes(col) => write!(f, "{col:?}")?,
@@ -52,6 +54,7 @@ impl DynamicColumn {
             DynamicColumn::I64(c) => &c.index,
             DynamicColumn::U64(c) => &c.index,
             DynamicColumn::F64(c) => &c.index,
+            DynamicColumn::U128(c) => &c.index,
             DynamicColumn::IpAddr(c) => &c.index,
             DynamicColumn::DateTime(c) => &c.index,
             DynamicColumn::Bytes(c) => &c.ords().index,
@@ -68,6 +71,7 @@ impl DynamicColumn {
             DynamicColumn::I64(c) => c.index,
             DynamicColumn::U64(c) => c.index,
             DynamicColumn::F64(c) => c.index,
+            DynamicColumn::U128(c) => c.index,
             DynamicColumn::IpAddr(c) => c.index,
             DynamicColumn::DateTime(c) => c.index,
             DynamicColumn::Bytes(c) => c.into_column_index(),
@@ -87,6 +91,7 @@ impl DynamicColumn {
             DynamicColumn::I64(c) => c.values.num_vals(),
             DynamicColumn::U64(c) => c.values.num_vals(),
             DynamicColumn::F64(c) => c.values.num_vals(),
+            DynamicColumn::U128(c) => c.values.num_vals(),
             DynamicColumn::IpAddr(c) => c.values.num_vals(),
             DynamicColumn::DateTime(c) => c.values.num_vals(),
             DynamicColumn::Bytes(c) => c.ords().values.num_vals(),
@@ -102,6 +107,7 @@ impl DynamicColumn {
             DynamicColumn::I64(_) => ColumnType::I64,
             DynamicColumn::U64(_) => ColumnType::U64,
             DynamicColumn::F64(_) => ColumnType::F64,
+            DynamicColumn::U128(_) => ColumnType::U128,
             DynamicColumn::IpAddr(_) => ColumnType::IpAddr,
             DynamicColumn::DateTime(_) => ColumnType::DateTime,
             DynamicColumn::Bytes(_) => ColumnType::Bytes,
@@ -123,6 +129,7 @@ impl DynamicColumn {
             | DynamicColumn::U64(_)
             | DynamicColumn::F64(_)
             | DynamicColumn::IpAddr(_)
+            | DynamicColumn::U128(_)
             | DynamicColumn::DateTime(_) => None,
         }
     }
@@ -273,6 +280,7 @@ static_dynamic_conversions!(BytesColumn, Bytes);
 static_dynamic_conversions!(Column<Ipv6Addr>, IpAddr);
 static_dynamic_conversions!(PlainStrColumn, PlainStr);
 static_dynamic_conversions!(PlainBytesColumn, PlainBytes);
+static_dynamic_conversions!(Column<u128>, U128);
 
 #[derive(Clone, Debug)]
 pub struct DynamicColumnHandle {
@@ -354,6 +362,13 @@ impl DynamicColumnHandle {
                 )?;
                 Ok(Some(column))
             }
+            ColumnType::U128 => {
+                let column = crate::column::open_column_u128_as_compact_u64(
+                    column_bytes,
+                    self.format_version,
+                )?;
+                Ok(Some(column))
+            }
             ColumnType::Bool
             | ColumnType::I64
             | ColumnType::U64
@@ -382,6 +397,9 @@ impl DynamicColumnHandle {
             }
             ColumnType::F64 => {
                 crate::column::open_column_u64::<f64>(column_bytes, self.format_version)?.into()
+            }
+            ColumnType::U128 => {
+                crate::column::open_column_u128::<u128>(column_bytes, self.format_version)?.into()
             }
             ColumnType::Bool => {
                 crate::column::open_column_u64::<bool>(column_bytes, self.format_version)?.into()

@@ -64,6 +64,12 @@ pub trait Value<'a>: Send + Sync + Debug {
     }
 
     #[inline]
+    /// If the Value is a u128, returns the associated u128. Returns None otherwise.
+    fn as_u128(&self) -> Option<u128> {
+        self.as_leaf().and_then(|leaf| leaf.as_u128())
+    }
+
+    #[inline]
     /// If the Value is a bool, returns the associated bool. Returns None otherwise.
     fn as_bool(&self) -> Option<bool> {
         self.as_leaf().and_then(|leaf| leaf.as_bool())
@@ -145,6 +151,8 @@ pub enum ReferenceValueLeaf<'a> {
     /// Opaque payload of a plugin-defined custom field. Distinct from [`Bytes`](Self::Bytes) so
     /// the built-ins leave it alone and a consuming plugin can recognize it.
     Custom(&'a [u8]),
+    /// U128 value
+    U128(u128),
 }
 
 impl From<u64> for ReferenceValueLeaf<'_> {
@@ -203,6 +211,13 @@ impl From<Ipv6Addr> for ReferenceValueLeaf<'_> {
     }
 }
 
+impl From<u128> for ReferenceValueLeaf<'_> {
+    #[inline]
+    fn from(value: u128) -> Self {
+        ReferenceValueLeaf::U128(value)
+    }
+}
+
 impl From<PreTokenizedString> for ReferenceValueLeaf<'_> {
     #[inline]
     fn from(val: PreTokenizedString) -> Self {
@@ -232,6 +247,7 @@ impl<'a, T: Value<'a> + ?Sized> From<ReferenceValueLeaf<'a>> for ReferenceValue<
             ReferenceValueLeaf::Custom(val) => {
                 ReferenceValue::Leaf(ReferenceValueLeaf::Custom(val))
             }
+            ReferenceValueLeaf::U128(val) => ReferenceValue::Leaf(ReferenceValueLeaf::U128(val)),
         }
     }
 }
@@ -297,6 +313,16 @@ impl<'a> ReferenceValueLeaf<'a> {
     /// If the Value is a IP address, returns the associated IP. Returns None otherwise.
     pub fn as_ip_addr(&self) -> Option<Ipv6Addr> {
         if let Self::IpAddr(val) = self {
+            Some(*val)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    /// If the Value is a u128, returns the associated u128. Returns None otherwise.
+    pub fn as_u128(&self) -> Option<u128> {
+        if let Self::U128(val) = self {
             Some(*val)
         } else {
             None
@@ -431,6 +457,12 @@ where V: Value<'a>
     /// If the Value is a IP address, returns the associated IP. Returns None otherwise.
     pub fn as_ip_addr(&self) -> Option<Ipv6Addr> {
         self.as_leaf().and_then(|leaf| leaf.as_ip_addr())
+    }
+
+    #[inline]
+    /// If the Value is a u128, returns the associated u128. Returns None otherwise.
+    pub fn as_u128(&self) -> Option<u128> {
+        self.as_leaf().and_then(|leaf| leaf.as_u128())
     }
 
     #[inline]

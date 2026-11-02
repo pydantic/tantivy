@@ -126,6 +126,12 @@ pub trait ValueDeserializer<'de> {
     /// Attempts to deserialize a bool value from the deserializer.
     fn deserialize_bool(self) -> Result<bool, DeserializeError>;
 
+    /// Attempts to deserialize a u128 value from the deserializer.
+    fn deserialize_u128(self) -> Result<u128, DeserializeError>
+    where Self: Sized {
+        Err(DeserializeError::UnsupportedType(ValueType::U128))
+    }
+
     /// Attempts to deserialize a pre-tokenized string value from the deserializer.
     fn deserialize_pre_tokenized_string(self) -> Result<PreTokenizedString, DeserializeError>;
 
@@ -155,6 +161,8 @@ pub enum ValueType {
     Bytes,
     /// A IP address value.
     IpAddr,
+    /// A u128 value.
+    U128,
     /// A boolean value.
     Bool,
     /// A pre-tokenized string value.
@@ -223,6 +231,12 @@ pub trait ValueVisitor {
     /// Called when the deserializer visits an IP address value.
     fn visit_ip_address(&self, _val: Ipv6Addr) -> Result<Self::Value, DeserializeError> {
         Err(DeserializeError::UnsupportedType(ValueType::IpAddr))
+    }
+
+    #[inline]
+    /// Called when the deserializer visits a u128 value.
+    fn visit_u128(&self, _val: u128) -> Result<Self::Value, DeserializeError> {
+        Err(DeserializeError::UnsupportedType(ValueType::U128))
     }
 
     #[inline]
@@ -391,6 +405,7 @@ where R: Read
                 }
             }
             type_codes::IP_CODE => ValueType::IpAddr,
+            type_codes::U128_CODE => ValueType::U128,
             type_codes::NULL_CODE => ValueType::Null,
             type_codes::ARRAY_CODE => ValueType::Array,
             type_codes::OBJECT_CODE => ValueType::Object,
@@ -484,6 +499,11 @@ where R: Read
             .map_err(DeserializeError::from)
     }
 
+    fn deserialize_u128(self) -> Result<u128, DeserializeError> {
+        self.validate_type(ValueType::U128)?;
+        <u128 as BinarySerializable>::deserialize(self.reader).map_err(DeserializeError::from)
+    }
+
     fn deserialize_bool(self) -> Result<bool, DeserializeError> {
         self.validate_type(ValueType::Bool)?;
         <bool as BinarySerializable>::deserialize(self.reader).map_err(DeserializeError::from)
@@ -530,6 +550,10 @@ where R: Read
             ValueType::IpAddr => {
                 let val = self.deserialize_ip_address()?;
                 visitor.visit_ip_address(val)
+            }
+            ValueType::U128 => {
+                let val = self.deserialize_u128()?;
+                visitor.visit_u128(val)
             }
             ValueType::Bool => {
                 let val = self.deserialize_bool()?;
@@ -732,6 +756,14 @@ impl ValueDeserialize for Ipv6Addr {
     fn deserialize<'de, D>(deserializer: D) -> Result<Self, DeserializeError>
     where D: ValueDeserializer<'de> {
         deserializer.deserialize_ip_address()
+    }
+}
+
+impl ValueDeserialize for u128 {
+    #[inline]
+    fn deserialize<'de, D>(deserializer: D) -> Result<Self, DeserializeError>
+    where D: ValueDeserializer<'de> {
+        deserializer.deserialize_u128()
     }
 }
 

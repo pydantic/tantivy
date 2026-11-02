@@ -32,6 +32,7 @@ struct SpareBuffers {
     value_index_builders: PreallocatedIndexBuilders,
     u64_values: Vec<u64>,
     ip_addr_values: Vec<Ipv6Addr>,
+    u128_values: Vec<u128>,
 }
 
 /// Makes it possible to create a new columnar.
@@ -53,6 +54,9 @@ pub struct ColumnarWriter {
     datetime_field_hash_map: ArenaHashMap,
     bool_field_hash_map: ArenaHashMap,
     ip_addr_field_hash_map: ArenaHashMap,
+    // Created lazily: each `ArenaHashMap` preallocates a 1MB arena page, which would otherwise
+    // be paid by every writer, even when no u128 column is ever recorded.
+    u128_field_hash_map: Option<ArenaHashMap>,
     bytes_field_hash_map: ArenaHashMap,
     str_field_hash_map: ArenaHashMap,
     generated_tie_breaker_columns: HashSet<Vec<u8>>,
@@ -70,6 +74,10 @@ impl ColumnarWriter {
             + self.bytes_field_hash_map.mem_usage()
             + self.str_field_hash_map.mem_usage()
             + self.ip_addr_field_hash_map.mem_usage()
+            + self
+                .u128_field_hash_map
+                .as_ref()
+                .map_or(0, ArenaHashMap::mem_usage)
             + self.datetime_field_hash_map.mem_usage()
             + self
                 .dictionaries
@@ -209,6 +217,10 @@ impl ColumnarWriter {
                 column_name.as_bytes(),
                 |column_opt: Option<ColumnWriter>| column_opt.unwrap_or_default(),
             ),
+            ColumnType::U128 => self.u128_field_hash_map_mut().mutate_or_create(
+                column_name.as_bytes(),
+                |column_opt: Option<ColumnWriter>| column_opt.unwrap_or_default(),
+            ),
         }
     }
 
@@ -243,6 +255,26 @@ impl ColumnarWriter {
             |column_opt: Option<ColumnWriter>| {
                 let mut column: ColumnWriter = column_opt.unwrap_or_default();
                 column.record(doc, ip_addr, arena);
+                column
+            },
+        );
+    }
+
+    fn u128_field_hash_map_mut(&mut self) -> &mut ArenaHashMap {
+        self.u128_field_hash_map
+            .get_or_insert_with(ArenaHashMap::default)
+    }
+
+    pub fn record_u128(&mut self, doc: RowId, column_name: &str, u128: u128) {
+        let hash_map = self
+            .u128_field_hash_map
+            .get_or_insert_with(ArenaHashMap::default);
+        let arena = &mut self.arena;
+        hash_map.mutate_or_create(
+            column_name.as_bytes(),
+            |column_opt: Option<ColumnWriter>| {
+                let mut column: ColumnWriter = column_opt.unwrap_or_default();
+                column.record(doc, u128, arena);
                 column
             },
         );
@@ -355,6 +387,13 @@ impl ColumnarWriter {
                 .iter()
                 .map(|(column_name, addr)| (column_name, ColumnType::IpAddr, addr)),
         );
+        if let Some(u128_field_hash_map) = &self.u128_field_hash_map {
+            columns.extend(
+                u128_field_hash_map
+                    .iter()
+                    .map(|(column_name, addr)| (column_name, ColumnType::U128, addr)),
+            );
+        }
         columns.extend(
             self.datetime_field_hash_map
                 .iter()
@@ -395,6 +434,28 @@ impl ColumnarWriter {
                     let mut column_serializer =
                         serializer.start_serialize_column(column_name, ColumnType::IpAddr);
                     serialize_ip_addr_column(
+                        cardinality,
+                        num_docs,
+                        column_writer.operation_iterator(
+                            arena,
+                            old_to_new_row_ids,
+                            &mut symbol_byte_buffer,
+                        ),
+                        buffers,
+                        &mut column_serializer,
+                    )?;
+                    column_serializer.finalize()?;
+                }
+                ColumnType::U128 => {
+                    let column_writer: ColumnWriter = self
+                        .u128_field_hash_map
+                        .as_ref()
+                        .expect("u128 columns are only listed when the u128 hash map exists")
+                        .read(addr);
+                    let cardinality = column_writer.get_cardinality(num_docs);
+                    let mut column_serializer =
+                        serializer.start_serialize_column(column_name, ColumnType::U128);
+                    serialize_u128_column(
                         cardinality,
                         num_docs,
                         column_writer.operation_iterator(
@@ -711,6 +772,29 @@ fn serialize_ip_addr_column(
         num_docs,
         value_index_builders,
         ip_addr_values,
+        wrt,
+    )?;
+    Ok(())
+}
+
+fn serialize_u128_column(
+    cardinality: Cardinality,
+    num_docs: RowId,
+    column_operations_it: impl Iterator<Item = ColumnOperation<u128>>,
+    buffers: &mut SpareBuffers,
+    wrt: &mut impl io::Write,
+) -> io::Result<()> {
+    let SpareBuffers {
+        value_index_builders,
+        u128_values,
+        ..
+    } = buffers;
+    send_to_serialize_column_mappable_to_u128(
+        column_operations_it,
+        cardinality,
+        num_docs,
+        value_index_builders,
+        u128_values,
         wrt,
     )?;
     Ok(())

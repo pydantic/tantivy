@@ -306,7 +306,7 @@ impl ToTypePaginationOrder for ColumnType {
             ColumnType::F64 | ColumnType::I64 | ColumnType::U64 => ColumnPaginationOrder::Numeric,
             ColumnType::IpAddr => ColumnPaginationOrder::IpAddr,
             ColumnType::DateTime => ColumnPaginationOrder::DateTime,
-            ColumnType::Bytes => panic!("unsupported"),
+            ColumnType::Bytes | ColumnType::U128 => panic!("unsupported"),
         }
     }
 }

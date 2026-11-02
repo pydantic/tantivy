@@ -85,6 +85,8 @@ pub enum Type {
     ///
     /// [`CustomOptions`]: crate::schema::CustomOptions
     Custom = b'c',
+    /// U128
+    U128 = b'8',
 }
 
 impl From<ColumnType> for Type {
@@ -98,6 +100,7 @@ impl From<ColumnType> for Type {
             ColumnType::DateTime => Type::Date,
             ColumnType::Bytes => Type::Bytes,
             ColumnType::IpAddr => Type::IpAddr,
+            ColumnType::U128 => Type::U128,
         }
     }
 }
@@ -155,6 +158,7 @@ impl Type {
             Type::Json => "Json",
             Type::IpAddr => "IpAddr",
             Type::Custom => "Custom",
+            Type::U128 => "U128",
         }
     }
 
@@ -174,6 +178,7 @@ impl Type {
             b'j' => Some(Type::Json),
             b'p' => Some(Type::IpAddr),
             b'c' => Some(Type::Custom),
+            b'8' => Some(Type::U128),
             _ => None,
         }
     }
@@ -214,6 +219,8 @@ pub enum FieldType {
     /// [`add_custom`](crate::TantivyDocument::add_custom) and consumed by a
     /// [`SegmentPlugin`](crate::SegmentPlugin).
     Custom(CustomOptions),
+    /// U128 field
+    U128(NumericOptions),
 }
 
 impl FieldType {
@@ -231,6 +238,7 @@ impl FieldType {
             FieldType::JsonObject(_) => Type::Json,
             FieldType::IpAddr(_) => Type::IpAddr,
             FieldType::Custom(_) => Type::Custom,
+            FieldType::U128(_) => Type::U128,
         }
     }
 
@@ -277,6 +285,7 @@ impl FieldType {
             FieldType::Bytes(ref bytes_options) => bytes_options.is_indexed(),
             FieldType::JsonObject(ref json_object_options) => json_object_options.is_indexed(),
             FieldType::IpAddr(ref ip_addr_options) => ip_addr_options.is_indexed(),
+            FieldType::U128(ref u128_options) => u128_options.is_indexed(),
             FieldType::TieBreaker | FieldType::Custom(_) => false,
         }
     }
@@ -313,6 +322,7 @@ impl FieldType {
             | FieldType::Bool(ref int_options) => int_options.is_fast(),
             FieldType::Date(ref date_options) => date_options.is_fast(),
             FieldType::IpAddr(ref ip_addr_options) => ip_addr_options.is_fast(),
+            FieldType::U128(ref u128_options) => u128_options.is_fast(),
             FieldType::Facet(_) => true,
             FieldType::JsonObject(ref json_object_options) => json_object_options.is_fast(),
             FieldType::TieBreaker => true,
@@ -336,6 +346,7 @@ impl FieldType {
             FieldType::Bytes(ref bytes_options) => bytes_options.fieldnorms(),
             FieldType::JsonObject(ref _json_object_options) => false,
             FieldType::IpAddr(ref ip_addr_options) => ip_addr_options.fieldnorms(),
+            FieldType::U128(ref u128_options) => u128_options.fieldnorms(),
             FieldType::TieBreaker | FieldType::Custom(_) => false,
         }
     }
@@ -383,6 +394,13 @@ impl FieldType {
                 .map(TextFieldIndexing::index_option),
             FieldType::IpAddr(ref ip_addr_options) => {
                 if ip_addr_options.is_indexed() {
+                    Some(IndexRecordOption::Basic)
+                } else {
+                    None
+                }
+            }
+            FieldType::U128(ref u128_options) => {
+                if u128_options.is_indexed() {
                     Some(IndexRecordOption::Basic)
                 } else {
                     None
@@ -502,6 +520,16 @@ impl FieldType {
                     json: JsonValue::String(field_text),
                 }),
                 FieldType::Custom(_) => Err(custom_not_json_error(JsonValue::String(field_text))),
+                FieldType::U128(_) => {
+                    let u128: u128 = u128::from_str(&field_text).map_err(|err| {
+                        ValueParsingError::ParseError {
+                            error: err.to_string(),
+                            json: JsonValue::String(field_text),
+                        }
+                    })?;
+
+                    Ok(OwnedValue::U128(u128))
+                }
             },
             JsonValue::Number(field_val_num) => match self {
                 FieldType::I64(_) | FieldType::Date(_) => {
@@ -567,6 +595,10 @@ impl FieldType {
                 FieldType::Custom(_) => {
                     Err(custom_not_json_error(JsonValue::Number(field_val_num)))
                 }
+                FieldType::U128(_) => Err(ValueParsingError::TypeError {
+                    expected: "a string with a u128",
+                    json: JsonValue::Number(field_val_num),
+                }),
             },
             JsonValue::Object(json_map) => match self {
                 FieldType::Str(_) => {

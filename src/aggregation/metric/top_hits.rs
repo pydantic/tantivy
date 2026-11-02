@@ -325,6 +325,10 @@ impl TopHitsAggregationReq {
                             .values_for_doc(doc_id)
                             .map(FastFieldValue::IpAddr)
                             .collect::<Vec<_>>(),
+                        DynamicColumn::U128(accessor) => accessor
+                            .values_for_doc(doc_id)
+                            .map(FastFieldValue::U128)
+                            .collect::<Vec<_>>(),
                         DynamicColumn::DateTime(accessor) => accessor
                             .values_for_doc(doc_id)
                             .map(FastFieldValue::Date)
@@ -382,6 +386,8 @@ pub enum FastFieldValue {
     IpAddr(Ipv6Addr),
     /// A list of values.
     Array(Vec<Self>),
+    /// U128
+    U128(u128),
 }
 
 impl From<FastFieldValue> for OwnedValue {
@@ -398,6 +404,7 @@ impl From<FastFieldValue> for OwnedValue {
             FastFieldValue::Array(a) => {
                 OwnedValue::Array(a.into_iter().map(OwnedValue::from).collect())
             }
+            FastFieldValue::U128(u128) => OwnedValue::U128(u128),
         }
     }
 }

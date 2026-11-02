@@ -477,7 +477,7 @@ impl PrecomputedAfterKey {
     ) -> crate::Result<Self> {
         use CompositeIntermediateKey as CIKey;
         let precomputed_key = match (composite_accessor.column_type, source_after_key) {
-            (ColumnType::Bytes, _) => panic!("unsupported"),
+            (ColumnType::Bytes | ColumnType::U128, _) => panic!("unsupported"),
             // null after key
             (_, CIKey::Null) => precompute_missing_after_key(false, missing_order, order),
             // numerical

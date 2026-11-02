@@ -139,6 +139,9 @@ where W: Write
                 ReferenceValueLeaf::Custom(_) => Err(io::Error::other(
                     "the store does not support custom field types",
                 )),
+                ReferenceValueLeaf::U128(val) => {
+                    self.serialize_with_type_code(type_codes::U128_CODE, &val)
+                }
             },
             ReferenceValue::Array(elements) => {
                 self.write_type_code(type_codes::ARRAY_CODE)?;

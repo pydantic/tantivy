@@ -51,6 +51,8 @@ pub enum OwnedValue {
     IpAddr(Ipv6Addr),
     /// Opaque payload of a plugin-defined custom field.
     Custom(Vec<u8>),
+    /// U128
+    U128(u128),
 }
 
 impl AsRef<OwnedValue> for OwnedValue {
@@ -82,6 +84,7 @@ impl OwnedValue {
             OwnedValue::Object(_) => 11,
             OwnedValue::IpAddr(_) => 12,
             OwnedValue::Custom(_) => 13,
+            OwnedValue::U128(_) => 14,
         }
     }
 }
@@ -106,6 +109,7 @@ impl<'a> Value<'a> for &'a OwnedValue {
             OwnedValue::Custom(val) => ReferenceValueLeaf::Custom(val).into(),
             OwnedValue::Array(array) => ReferenceValue::Array(array.iter()),
             OwnedValue::Object(object) => ReferenceValue::Object(ObjectMapIter(object.iter())),
+            OwnedValue::U128(val) => ReferenceValueLeaf::U128(*val).into(),
         }
     }
 }
@@ -148,6 +152,10 @@ impl ValueDeserialize for OwnedValue {
 
             fn visit_ip_address(&self, val: Ipv6Addr) -> Result<Self::Value, DeserializeError> {
                 Ok(OwnedValue::IpAddr(val))
+            }
+
+            fn visit_u128(&self, val: u128) -> Result<Self::Value, DeserializeError> {
+                Ok(OwnedValue::U128(val))
             }
 
             fn visit_facet(&self, val: Facet) -> Result<Self::Value, DeserializeError> {
@@ -231,6 +239,7 @@ impl serde::Serialize for OwnedValue {
             // round-trip through serde (they are populated programmatically), so this is lossy
             // by design.
             OwnedValue::Custom(ref bytes) => serializer.serialize_str(&BASE64.encode(bytes)),
+            OwnedValue::U128(ref u128) => u128.serialize(serializer),
         }
     }
 }
@@ -319,6 +328,7 @@ impl<'a, V: Value<'a>> From<ReferenceValue<'a, V>> for OwnedValue {
                 ReferenceValueLeaf::Bool(val) => OwnedValue::Bool(val),
                 ReferenceValueLeaf::PreTokStr(val) => OwnedValue::PreTokStr(*val.clone()),
                 ReferenceValueLeaf::Custom(val) => OwnedValue::Custom(val.to_vec()),
+                ReferenceValueLeaf::U128(u128) => OwnedValue::U128(u128),
             },
             ReferenceValue::Array(val) => {
                 OwnedValue::Array(val.map(|v| v.as_value().into()).collect())

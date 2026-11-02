@@ -533,6 +533,10 @@ impl QueryParser {
             FieldType::Custom(_) => {
                 unreachable!("the query parser does not support custom field types")
             }
+            FieldType::U128(_) => {
+                let u128 = u128::from_str(phrase)?;
+                Ok(Term::from_field_u128(field, u128))
+            }
         }
     }
 
@@ -633,6 +637,11 @@ impl QueryParser {
             FieldType::IpAddr(_) => {
                 let ip_v6 = IpAddr::from_str(phrase)?.into_ipv6_addr();
                 let term = Term::from_field_ip_addr(field, ip_v6);
+                Ok(vec![LogicalLiteral::Term(term)])
+            }
+            FieldType::U128(_) => {
+                let u128 = u128::from_str(phrase)?;
+                let term = Term::from_field_u128(field, u128);
                 Ok(vec![LogicalLiteral::Term(term)])
             }
             // These fields are not indexed, so the `is_indexed()` guard above returns

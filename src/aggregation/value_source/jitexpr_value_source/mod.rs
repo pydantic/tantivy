@@ -234,7 +234,7 @@ fn var_type_for_column_type(column_type: ColumnType) -> Option<VarType> {
         ColumnType::U64 => Some(VarType::U64),
         ColumnType::F64 => Some(VarType::F64),
         ColumnType::Str => Some(VarType::Str),
-        ColumnType::Bytes | ColumnType::IpAddr | ColumnType::DateTime => None,
+        ColumnType::Bytes | ColumnType::IpAddr | ColumnType::DateTime | ColumnType::U128 => None,
     }
 }
 
@@ -252,7 +252,7 @@ fn target_type_set(allowed_column_types: Option<&[ColumnType]>) -> InferredTypeS
             ColumnType::F64 => target_types.f64 = true,
             ColumnType::Str => target_types.string = true,
             // jitexpr has no such types.
-            ColumnType::DateTime | ColumnType::IpAddr | ColumnType::Bytes => {}
+            ColumnType::DateTime | ColumnType::IpAddr | ColumnType::Bytes | ColumnType::U128 => {}
         }
     }
     target_types

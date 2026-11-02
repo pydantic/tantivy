@@ -1018,6 +1018,75 @@ mod tests {
     }
 
     #[test]
+    fn test_u128_indexed_stored_fast_and_merged() -> crate::Result<()> {
+        use crate::collector::Count;
+        use crate::query::TermQuery;
+        use crate::schema::{IndexRecordOption, NumericOptions, Value};
+        use crate::Term;
+
+        let mut schema_builder = Schema::builder();
+        let id_field = schema_builder.add_u128_field(
+            "id",
+            NumericOptions::default()
+                .set_indexed()
+                .set_stored()
+                .set_fast(),
+        );
+        let schema = schema_builder.build();
+        let index = Index::create_in_ram(schema);
+        let big = u128::MAX - 7;
+        {
+            // The minimum memory budget would flush on the u128 column writer's first allocation.
+            let mut index_writer: IndexWriter = index.writer_with_num_threads(1, 50_000_000)?;
+            index_writer.set_merge_policy(Box::new(NoMergePolicy));
+            // A segment without any u128 value.
+            index_writer.add_document(TantivyDocument::default())?;
+            index_writer.commit()?;
+            let mut doc = TantivyDocument::default();
+            doc.add_u128(id_field, big);
+            index_writer.add_document(doc)?;
+            index_writer.add_document(TantivyDocument::default())?;
+            index_writer.commit()?;
+        }
+
+        let check = |expected_segments: usize| -> crate::Result<()> {
+            let searcher = index.reader()?.searcher();
+            assert_eq!(searcher.segment_readers().len(), expected_segments);
+            let term_query = TermQuery::new(
+                Term::from_field_u128(id_field, big),
+                IndexRecordOption::Basic,
+            );
+            assert_eq!(searcher.search(&term_query, &Count)?, 1);
+            let mut found = 0;
+            for (segment_ord, segment_reader) in searcher.segment_readers().iter().enumerate() {
+                let column: Option<Column<u128>> = segment_reader.fast_fields().column_opt("id")?;
+                for doc_id in 0..segment_reader.max_doc() {
+                    let doc: TantivyDocument =
+                        searcher.doc(crate::DocAddress::new(segment_ord as u32, doc_id))?;
+                    let stored = doc.get_first(id_field).and_then(|value| value.as_u128());
+                    let fast = column.as_ref().and_then(|column| column.first(doc_id));
+                    if stored.is_some() {
+                        found += 1;
+                        assert_eq!(stored, Some(big));
+                        assert_eq!(fast, Some(big));
+                    } else {
+                        assert_eq!(fast, None);
+                    }
+                }
+            }
+            assert_eq!(found, 1);
+            Ok(())
+        };
+        check(2)?;
+
+        let segment_ids = index.searchable_segment_ids()?;
+        let mut index_writer: IndexWriter = index.writer_for_tests()?;
+        index_writer.merge(&segment_ids).wait()?;
+        index_writer.wait_merging_threads()?;
+        check(1)
+    }
+
+    #[test]
     fn test_mapping_bug_docids_for_value_range() {
         let mut schema_builder = Schema::builder();
         let num_field = schema_builder.add_u64_field("url_norm_hash", FAST | INDEXED);

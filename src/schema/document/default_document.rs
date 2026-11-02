@@ -96,6 +96,11 @@ impl CompactDoc {
         self.add_leaf_field_value(field, value);
     }
 
+    /// Add a U128 field.
+    pub fn add_u128(&mut self, field: Field, value: u128) {
+        self.add_leaf_field_value(field, value);
+    }
+
     /// Add a i64 field
     pub fn add_i64(&mut self, field: Field, value: i64) {
         self.add_leaf_field_value(field, value);
@@ -269,6 +274,7 @@ impl CompactDoc {
             }
             ReferenceValueLeaf::IpAddr(num) => write_into(&mut self.node_data, num.to_u128()),
             ReferenceValueLeaf::PreTokStr(pre_tok) => write_into(&mut self.node_data, *pre_tok),
+            ReferenceValueLeaf::U128(u128) => write_into(&mut self.node_data, u128),
         };
         ValueAddr { type_id, val_addr }
     }
@@ -493,6 +499,11 @@ impl<'a> CompactDocValue<'a> {
                 self.container,
                 addr,
             )?)),
+            ValueType::U128 => self
+                .container
+                .read_from::<u128>(addr)
+                .map(|num| ReferenceValueLeaf::U128(num))
+                .map(Into::into),
         }
     }
 }
@@ -565,6 +576,8 @@ pub enum ValueType {
     Array = 12,
     /// Opaque payload of a plugin-defined custom field.
     Custom = 13,
+    /// U128
+    U128 = 14,
 }
 
 impl BinarySerializable for ValueType {
@@ -575,7 +588,7 @@ impl BinarySerializable for ValueType {
 
     fn deserialize<R: Read>(reader: &mut R) -> io::Result<Self> {
         let num = u8::deserialize(reader)?;
-        let type_id = if (0..=13).contains(&num) {
+        let type_id = if (0..=14).contains(&num) {
             unsafe { std::mem::transmute::<u8, ValueType>(num) }
         } else {
             return Err(io::Error::new(
@@ -611,6 +624,7 @@ impl<'a> From<&ReferenceValueLeaf<'a>> for ValueType {
             ReferenceValueLeaf::Facet(_) => ValueType::Facet,
             ReferenceValueLeaf::Bytes(_) => ValueType::Bytes,
             ReferenceValueLeaf::Custom(_) => ValueType::Custom,
+            ReferenceValueLeaf::U128(_) => ValueType::U128,
         }
     }
 }
